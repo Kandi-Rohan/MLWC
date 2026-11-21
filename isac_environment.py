@@ -145,30 +145,39 @@ class ISACEnvironment:
         return (np.log2(1 + c.power_w * user_norms**2 / c.noise_w),
                 c.power_w * target_norms**2)
 
+    def reflected_links(self, grid):
+        """Return conjugated RIS-to-user and RIS-to-target channels after masking."""
+        if grid is None:
+            return self.ris_users.conj(), self.ris_targets.conj()
+        labels = grid.ravel()
+        return (self.ris_users.conj() * (self.user_group[:, None] == labels),
+                self.ris_targets.conj() * (labels == self.config.groups))
+
+    def stream_metrics(self, user_streams, target_streams):
+        """Compute rates, sensing power and the QoS part of Eq. (8), with optional batches."""
+        c = self.config
+        received = np.abs(user_streams) ** 2
+        users = np.arange(c.users)
+        desired = received[..., users, users].copy()
+        received[..., users, users] = 0
+        interference = received.sum(axis=-1)
+        rates = np.log2(1 + desired / (interference + c.noise_w))
+        sensing = (np.abs(target_streams) ** 2).sum(axis=-1)
+        rate_deficit = np.maximum(c.min_rate - rates, 0).sum(axis=-1)
+        sensing_deficit = np.maximum(c.min_sensing_w - sensing, 0).sum(axis=-1)
+        score = rates.sum(axis=-1) - 10 * (rate_deficit + sensing_deficit)
+        return rates, sensing, desired, interference, score
+
     def evaluate(self, grid, beam, phases):
         """Evaluate beamforming on the current channels and partition."""
-        c = self.config
         reflected = np.exp(1j * phases)[:, None] * self.bs_ris
-        # A shared surface makes its full reflected aperture available to all links.
-        labels = grid.ravel() if grid is not None else None
-        user_mask = True if labels is None else self.user_group[:, None] == labels
-        target_mask = True if labels is None else labels == c.groups
-        effective_users = (self.ris_users.conj() * user_mask) @ reflected
-        received = np.abs(effective_users @ beam) ** 2
-        users = np.arange(c.users)
-        desired = received[users, users].copy()
-        received[users, users] = 0
-        interference = received.sum(axis=1)
-        rates = np.log2(1 + desired / (interference + c.noise_w))
-
-        effective_targets = self.direct.conj() + (
-            self.ris_targets.conj() * target_mask
-        ) @ reflected
-        sensing = (np.abs(effective_targets @ beam) ** 2).sum(axis=1)
+        users, targets = self.reflected_links(grid)
+        effective_users = users @ reflected
+        effective_targets = self.direct.conj() + targets @ reflected
+        rates, sensing, desired, interference, score = self.stream_metrics(
+            effective_users @ beam, effective_targets @ beam)
         power = float(np.sum(np.abs(beam) ** 2))
-        rate_deficit = np.maximum(c.min_rate - rates, 0).sum()
-        sensing_deficit = np.maximum(c.min_sensing_w - sensing, 0).sum()
-        reward = rates.sum() - 10 * (rate_deficit + sensing_deficit + max(power - c.power_w, 0))
+        reward = score - 10 * max(power - self.config.power_w, 0)
         return dict(rates=rates, sensing_w=sensing, power_w=power, reward=float(reward),
                     sum_rate=float(rates.sum()), desired_w=desired, interference_w=interference)
 

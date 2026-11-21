@@ -79,7 +79,7 @@ def fixed_grid(config):
     return grid
 
 
-def heuristic(env, shared):
+def heuristic_action(env, shared):
     """Phase alignment to representative links followed by regularized ZF."""
     c = env.config
     grid = fixed_grid(c)
@@ -114,7 +114,11 @@ def heuristic(env, shared):
     beam = np.column_stack((comm_beam, targets.conj().T))
     beam *= np.sqrt(c.power_w / env.streams) / np.maximum(
         np.linalg.norm(beam, axis=0), np.finfo(float).tiny)
-    return env.evaluate(None if shared else grid, beam, phase)
+    return (None if shared else grid), beam, phase
+
+
+def heuristic(env, shared):
+    return env.evaluate(*heuristic_action(env, shared))
 
 
 def sweep(seed, trials, steps, plot_path):

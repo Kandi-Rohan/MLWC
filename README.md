@@ -2,6 +2,16 @@
 
 Course implementation of Wei et al., *Machine Learning-Driven Joint RIS Partitioning, Beamforming, and Phase Shifts Design for mmWave ISAC Systems*.
 
+## How the paper works
+
+The base station sends communication and sensing streams through the same wireless system. The RIS is a surface with many reflecting elements. Changing their phases can make reflected signals add coherently in a desired direction. Dividing the surface into rectangles lets different user groups and the sensing group steer different parts of the surface. A larger rectangle for one group leaves fewer elements for the others.
+
+1. **Generate the channels.** The simulator models propagation from the BS to the RIS, from the RIS to each receiver, and directly from the BS to sensing targets. Direct BS-to-user links are blocked in the paper's model.
+2. **Group similar users.** Normalized channel correlation measures how similar their RIS channels are. The paper's k-means++-style procedure chooses well-separated initial representatives and assigns users to the closest representative by correlation.
+3. **Choose the allocation.** A DDPG actor observes channel state information and proposes RIS rectangles, BS beamforming weights, and phases. The decoder forms a valid partition, caps transmit power, and quantizes phases to three bits. Our decoder uses recursive cuts to approximate the paper's rectangle projection and completion.
+4. **Evaluate and learn.** User SINR accounts for interference from other streams. The receiver rate is log2(1 + SINR). Sensing performance is target illumination in watts, with direct and reflected amplitudes combined before squaring. The training reward adds the user rates and subtracts penalties for shortfalls. The critic estimates that reward and guides the actor.
+5. **Compare methods.** On the same simulated channels, report both mean sum rate and the fraction of draws where every user and target meets its threshold. The fixed and shared RIS baselines isolate the effect of allocation and give the learned policy a conventional comparison.
+
 ## Run
 
 From this folder, install the packages in `requirements.txt` if needed and run:
@@ -114,3 +124,27 @@ First, we used per-link upper bounds with all transmit power and the full RIS, i
 | 60 dB | 100% | 100% | 5% | 0% |
 
 The endpoint angles leave the link-budget gap open. At +30 dB both variants pass the necessary upper-bound check on 61% of draws, and the fixed policy passes on 0%. The geometry variant also produces an interference-limited user on every fixed-policy draw. Those results explain why a common power gain or longer DDPG training alone cannot establish a reproduction of Fig. 2 under the reference channel settings.
+
+## Step 3. Interference-aware alternating optimization
+
+```powershell
+python ao_baseline.py --ris-sides 3 4 5 6 7 8 10
+```
+
+For both the fixed partition and the shared surface, initialize with the existing phase-alignment and regularized zero-forcing heuristic. Hold the RIS phases fixed and take one projected gradient step on the BS beamforming matrix. The gradient includes interference at every user and the sensing term from Eq. (8). Backtracking accepts an improving step and the projection respects the transmit-power cap. Then hold the beamforming matrix fixed and test all eight allowed phase values at each element. Repeat for up to six rounds. This baseline uses projected gradient and discrete coordinate search. The separate ref. [11] greedy partitioning benchmark remains open.
+
+The following mean sum rates are in bit/s/Hz. Each size uses 100 paired draws at 16 BS antennas and the original channel settings.
+
+| RIS elements | Fixed heuristic | Fixed AO | Shared heuristic | Shared AO |
+| ---: | ---: | ---: | ---: | ---: |
+| 9 | 0.0000167 | 0.000287 | 0.000279 | 0.00500 |
+| 16 | 0.0000806 | 0.00139 | 0.000749 | 0.0151 |
+| 25 | 0.000114 | 0.00217 | 0.00142 | 0.0357 |
+| 36 | 0.000273 | 0.00561 | 0.00316 | 0.0639 |
+| 49 | 0.000452 | 0.00894 | 0.00628 | 0.109 |
+| 64 | 0.000802 | 0.0163 | 0.0103 | 0.171 |
+| 100 | 0.00186 | 0.0370 | 0.0198 | 0.305 |
+
+Every method had 0% all-user, all-target, and joint QoS satisfaction at every size. AO improved its initialization but did not resolve the link-budget gap. The objective uses the sensing deficit in watts, so a numerically small sensing penalty can coexist with a large relative sensing shortfall. We therefore continue to report the sensing threshold separately.
+
+The original channel audit passed after the evaluator refactor. On 20 regression draws, the refactored evaluator reproduced the prior rates, illumination, and states. Finite differences checked the complex beam gradient. Additional checks verified the power cap, discrete phases, and increasing reward on accepted AO iterations.
