@@ -85,3 +85,32 @@ The deterministic case uses a 16-antenna BS, a 6 by 6 RIS, the paper's node coor
 The two-hop path gains multiply. Their combined loss is about 183.51 dB before coherent array gain. Even with all 36 RIS elements aligned and the 16-antenna BS beam at full power, this example falls below 0.5 bit/s/Hz for the user and 3e-7 W for the target. The earlier 100-draw feasibility check showed the gap across sampled channels as well.
 
 No equation or unit error was found in the cases checked. The remaining reproduction assumptions include the number and distribution of paths, how steering angles relate to physical positions, and whether the numerical results use additional link or array gain beyond the stated equations. The current simulator samples path angles independently of geometry and uses a common full-aperture channel restricted to each partition. Those assumptions should be tested separately in Step 2, with the original settings retained as the reference case.
+
+## Step 2. Paired feasibility and gain sensitivity
+
+```powershell
+python channel_audit/feasibility_sensitivity.py --draws 100 --seed 100000
+```
+
+We compared two angle assumptions on the same draws with 16 BS antennas, 36 RIS elements, six users, and three sensing targets. Both use the same positions, shadowing, path gains, phase resolution, thresholds, and power budget. The geometry variant uses the endpoint direction of the largest-magnitude path on each link and retains the random angles for the other paths. It assumes a BS ULA along x and RIS rows and columns along x and z. The BS-to-RIS arrival direction points from the RIS toward the BS. These array orientations and the strongest-path rule are choices for the sensitivity experiment.
+
+First, we used per-link upper bounds with all transmit power and the full RIS, ignoring interference. This tests whether the channels clear a necessary condition for joint feasibility. Then we used the existing fixed-partition beamforming heuristic to measure how much gain a concrete policy would need. The gain test scales received signal and interference power together at each CU, leaving its noise floor fixed. Target illumination power scales by the same tested factor. If a user's signal-to-interference ratio is already below its threshold, no finite gain can make that fixed beam pass. The experiment applies these gain factors to the evaluated links as a sensitivity test. The simulator's path loss and thresholds retain their original values.
+
+| Angle model | Evaluation | All users pass | All targets pass | Joint pass | Median gain needed by weakest CU | Median gain needed by weakest target | Any CU interference-limited |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Random | Upper bounds | 0% | 0% | 0% | 28.0 dB | 18.5 dB | 0% |
+| Geometry for strongest path | Upper bounds | 0% | 0% | 0% | 27.7 dB | 18.2 dB | 0% |
+| Random | Fixed partition | 0% | 0% | 0% | No finite gain | 26.4 dB | 90% |
+| Geometry for strongest path | Fixed partition | 0% | 0% | 0% | No finite gain | 24.3 dB | 100% |
+
+| Added effective power gain | Random upper bounds pass jointly | Geometry upper bounds pass jointly | Random fixed partition passes jointly | Geometry fixed partition passes jointly |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 dB | 0% | 0% | 0% | 0% |
+| 10 dB | 0% | 0% | 0% | 0% |
+| 20 dB | 12% | 7% | 0% | 0% |
+| 30 dB | 61% | 61% | 0% | 0% |
+| 40 dB | 95% | 94% | 0% | 0% |
+| 50 dB | 100% | 100% | 0% | 0% |
+| 60 dB | 100% | 100% | 5% | 0% |
+
+The endpoint angles leave the link-budget gap open. At +30 dB both variants pass the necessary upper-bound check on 61% of draws, and the fixed policy passes on 0%. The geometry variant also produces an interference-limited user on every fixed-policy draw. Those results explain why a common power gain or longer DDPG training alone cannot establish a reproduction of Fig. 2 under the reference channel settings.

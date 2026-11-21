@@ -104,8 +104,8 @@ class ISACEnvironment:
         gains = (self.rng.normal(size=c.paths) + 1j * self.rng.normal(size=c.paths))
         gains *= np.sqrt(10 ** (-path_loss / 10) / (2 * c.paths))
         paths = []
-        for gain in gains:
-            azimuth, elevation, departure = self.rng.uniform(-np.pi / 2, np.pi / 2, 3)
+        angles = self._path_angles(source, destination, kind, gains)
+        for gain, (azimuth, elevation, departure) in zip(gains, angles):
             if kind == "direct":
                 response = a_ula(c.antennas, departure)
             else:
@@ -114,6 +114,9 @@ class ISACEnvironment:
                     response = np.outer(response, a_ula(c.antennas, departure).conj())
             paths.append(gain * response)
         return np.sum(paths, axis=0)
+
+    def _path_angles(self, source, destination, kind, gains):
+        return np.array([self.rng.uniform(-np.pi / 2, np.pi / 2, 3) for _ in gains])
 
     def reset(self):
         """Draw fresh CSI and fix the NCC groups for that realization."""
@@ -155,7 +158,8 @@ class ISACEnvironment:
         users = np.arange(c.users)
         desired = received[users, users].copy()
         received[users, users] = 0
-        rates = np.log2(1 + desired / (received.sum(axis=1) + c.noise_w))
+        interference = received.sum(axis=1)
+        rates = np.log2(1 + desired / (interference + c.noise_w))
 
         effective_targets = self.direct.conj() + (
             self.ris_targets.conj() * target_mask
@@ -166,7 +170,7 @@ class ISACEnvironment:
         sensing_deficit = np.maximum(c.min_sensing_w - sensing, 0).sum()
         reward = rates.sum() - 10 * (rate_deficit + sensing_deficit + max(power - c.power_w, 0))
         return dict(rates=rates, sensing_w=sensing, power_w=power, reward=float(reward),
-                    sum_rate=float(rates.sum()))
+                    sum_rate=float(rates.sum()), desired_w=desired, interference_w=interference)
 
     def step(self, action):
         """Decode a continuous action in [-1, 1] and draw the next CSI."""
