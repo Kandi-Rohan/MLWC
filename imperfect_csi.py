@@ -37,21 +37,30 @@ def noisy_channel_view(true_env, errors, variance, relative):
     return estimated, scoring, state, error_energy
 
 
-def channel_errors(env, rng, antenna_width=None):
-    """Draw iid complex errors, optionally slicing a common wider array."""
-    errors = []
-    for name in LINK_NAMES:
-        channel = getattr(env, name)
-        shape = channel.shape
-        if antenna_width is not None and name in ("bs_ris", "direct"):
-            shape = (shape[0], antenna_width)
-        error = (rng.normal(size=shape) + 1j * rng.normal(size=shape)) / np.sqrt(2)
-        errors.append(error[:, :channel.shape[1]])
-    return errors
+def channel_errors(env, rng, antenna_width=None, ris_shape=None):
+    """Draw iid complex errors, slicing common BS or RIS arrays for sweeps."""
+    c = env.config
+    width = c.antennas if antenna_width is None else antenna_width
+    rows, cols = (c.rows, c.cols) if ris_shape is None else ris_shape
+    if width < c.antennas or rows < c.rows or cols < c.cols:
+        raise ValueError("Shared error arrays must contain the current BS and RIS arrays.")
+    elements = rows * cols
+    if ris_shape is None:
+        cells = slice(None)
+    else:
+        cells = np.arange(elements).reshape(rows, cols)[:c.rows, :c.cols].ravel()
+
+    def complex_error(shape):
+        return (rng.normal(size=shape) + 1j * rng.normal(size=shape)) / np.sqrt(2)
+
+    return (complex_error((elements, width))[cells, :c.antennas],
+            complex_error((c.users, elements))[:, cells],
+            complex_error((c.targets, elements))[:, cells],
+            complex_error((c.targets, width))[:, :c.antennas])
 
 
 def evaluate_conditions(env, profiles, draws, iterations, variance, noise_seed, *,
-                        error_modes=(False, True), antenna_width=None):
+                        error_modes=(False, True), antenna_width=None, ris_shape=None):
     rng = np.random.default_rng(noise_seed)
     scores = []
     channel_energy = []
@@ -61,7 +70,7 @@ def evaluate_conditions(env, profiles, draws, iterations, variance, noise_seed, 
         state = env.reset()
         channels = [getattr(env, name) for name in LINK_NAMES]
         # Reuse the same standard complex draws in both noisy conditions.
-        errors = channel_errors(env, rng, antenna_width)
+        errors = channel_errors(env, rng, antenna_width, ris_shape)
         channel_energy.append([np.vdot(h, h).real for h in channels])
         conditions = [(env, env, state, [0] * len(channels))]
         conditions.extend(noisy_channel_view(env, errors, variance, relative)
