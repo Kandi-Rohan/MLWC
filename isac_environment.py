@@ -185,8 +185,8 @@ class ISACEnvironment:
         return dict(rates=rates, sensing_w=sensing, power_w=power, reward=float(reward),
                     sum_rate=float(rates.sum()), desired_w=desired, interference_w=interference)
 
-    def step(self, action):
-        """Decode a continuous action in [-1, 1] and draw the next CSI."""
+    def evaluate_action(self, action):
+        """Decode and score a continuous action on the current CSI."""
         c = self.config
         action = np.asarray(action, dtype=float)
         if action.shape != (self.action_size,) or not np.isfinite(action).all():
@@ -201,6 +201,11 @@ class ISACEnvironment:
         phases = quantize(np.pi * (action[-self.elements:] + 1), c.bits)
         info = self.evaluate(grid, beam, phases)
         info["partition"] = grid
+        return info
+
+    def step(self, action):
+        """Score an action and draw the next CSI."""
+        info = self.evaluate_action(action)
         return self.reset(), info["reward"], info
 
 

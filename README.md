@@ -191,3 +191,32 @@ For comparison, the same controlled test with the paper's learning rate and targ
 ```powershell
 python ddpg_sanity.py --lr 1e-6 --tau 1e-8 --plot ddpg_sanity_paper_settings.png
 ```
+
+## Step 5. Paired DDPG versus AO at 36 RIS elements
+
+```powershell
+python compare_policies.py
+```
+
+This experiment uses the original simulated channel model with 16 BS antennas, a 6 by 6 RIS, six communication users, and three sensing targets. Train DDPG from scratch for 2,400 steps per seed with seeds 0, 1, and 2. Run two training settings with the same step budget. One uses the paper's learning rate and target coefficient of 1e-6 and 1e-8. The other uses the faster sanity-check settings of 3e-4 and 0.005. Score the initial and final actors without exploration noise.
+
+All actors and all three AO layouts are evaluated on exactly the same 100 held-out draws from seed 100000. The environment evaluates the current action without advancing its channel state between methods. Each AO baseline runs up to six rounds with access to the current channel, while DDPG decodes one actor output per draw. Use sum rate to compare communication throughput. Use the three threshold columns to see whether all users pass, all targets pass, or both. The DDPG rows average over each seed's held-out draws and then across the three training seeds.
+
+The channel audit passed again after extracting the non-advancing action evaluator. On 20 regression draws it matched the previous step interface, including the next state and every reported metric. The three AO means matched the prior 100-draw comparison.
+
+| Method | Mean sum rate (bit/s/Hz) | Mean reward | All users pass | All targets pass | Joint pass |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fixed partition AO | 0.00560964 | -29.938303 | 0% | 0% | 0% |
+| Shared RIS AO | 0.0639383 | -29.308341 | 0% | 0% | 0% |
+| Greedy assignment AO | 0.0567903 | -29.375316 | 0% | 0% | 0% |
+| DDPG before training | 2.09997e-5 | -29.999778 | 0% | 0% | 0% |
+| DDPG, paper settings | 1.94689e-5 | -29.999795 | 0% | 0% | 0% |
+| DDPG, faster settings | 1.79680e-5 | -29.999811 | 0% | 0% | 0% |
+
+| DDPG training seed | Paper settings mean sum rate | Faster settings mean sum rate |
+| ---: | ---: | ---: |
+| 0 | 2.47391e-5 | 2.71262e-5 |
+| 1 | 1.66455e-5 | 1.38470e-5 |
+| 2 | 1.70219e-5 | 1.29308e-5 |
+
+Shared RIS AO had the highest mean sum rate in this experiment. Both DDPG settings averaged slightly below the untrained actors after the stated step budget. The per-link upper bounds passed all users on 0% of these draws and all targets on 0%, confirming the existing feasibility gap for this held-out set. This comparison measures the complete policies under the current model. Figure 2 and the question of how much the learned partition contributes remain open.

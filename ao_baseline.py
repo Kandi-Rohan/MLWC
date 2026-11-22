@@ -135,6 +135,14 @@ def metrics(config, info):
     return [info["sum_rate"], info["reward"], users_pass, targets_pass, users_pass and targets_pass]
 
 
+def baseline_actions(env):
+    """Initialize the three conventional layouts on one channel draw."""
+    fixed = heuristic_action(env, shared=False)
+    shared = heuristic_action(env, shared=True)
+    greedy_grid, greedy_phases = greedy_partition(env, fixed[1])
+    return fixed, shared, (greedy_grid, fixed[1], greedy_phases)
+
+
 def compare(side, draws, iterations, seed):
     config = replace(Config(), rows=side, cols=side)
     env = ISACEnvironment(config, seed)
@@ -142,10 +150,8 @@ def compare(side, draws, iterations, seed):
     allocations = []
     for _ in range(draws):
         env.reset()
-        fixed = heuristic_action(env, shared=False)
-        shared = heuristic_action(env, shared=True)
-        greedy_grid, greedy_phases = greedy_partition(env, fixed[1])
-        greedy = (greedy_grid, fixed[1], greedy_phases)
+        fixed, shared, greedy = baseline_actions(env)
+        greedy_grid = greedy[0]
         allocations.append(np.bincount(greedy_grid.ravel(), minlength=config.groups + 1))
         outcomes = []
         for grid, beam, phases in (fixed, shared, greedy):
