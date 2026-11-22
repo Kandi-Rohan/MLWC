@@ -18,9 +18,11 @@ TRAINING_SETTINGS = {
 AO_NAMES = ("Fixed partition AO", "Shared RIS AO", "Greedy assignment AO")
 
 
-def train_actors(config, seeds, steps):
+def train_actors(config, seeds, steps, *, training_settings=None):
+    if training_settings is None:
+        training_settings = TRAINING_SETTINGS
     profiles = {}
-    for label, (lr, tau) in TRAINING_SETTINGS.items():
+    for label, (lr, tau) in training_settings.items():
         runs = {}
         for seed in seeds:
             print(f"Training {label}, seed {seed}, {steps} steps", flush=True)

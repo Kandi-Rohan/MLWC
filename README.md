@@ -248,3 +248,46 @@ The script prints sum rate and QoS pass rates for all methods, how often estimat
 All entries are held-out mean sum rates in bit/s/Hz. Every method had 0% all-user, all-target, and joint pass in all three conditions. The perfect-CSI values reproduced Step 5 to the displayed precision. Estimated group labels differed from the perfect-CSI labels on 100 of 100 raw-error draws and 46 of 100 relative-error draws.
 
 Raw error energy was 3.65 million to 11.2 million times the true channel energy across the four link types. It obscures the simulated CSI and gives much lower rates for all AO methods. Relative error energy was 0.96% to 1.03% of the true channel energy. In that case, the method ranking was preserved and the rates stayed close to the perfect-CSI runs. The small increases under relative noise apply to this draw set and the finite-iteration solvers. These comparisons document the effect of the error convention on our simulator and leave the paper's imperfect-CSI curves open.
+
+## Step 7. BS antenna-count sweep for Fig. 2(b)
+
+```powershell
+python antenna_sweep.py
+```
+
+Sweep 4, 8, 12, 16, 20, 24, 28, and 32 BS antennas with the RIS fixed at 36 elements, six CUs, three CU groups, and three targets. Use 100 held-out true channel draws per count from seed 100000. The path gains, angles, and node positions are paired across antenna counts. For a smaller array the true BS channel is the corresponding prefix of the larger array. Estimation errors use the same complex Gaussian samples across antenna widths, generated for the largest array and sliced to each width before applying the per-link RMS scaling.
+
+Compare the three six-round AO baselines with a DDPG pilot trained separately for each antenna count with 320 steps per seed, using seeds 0, 1, and 2 and the faster settings from Step 4. Report perfect CSI and 1% relative error energy. The raw additive stress test is documented in Step 6. Scores use the true channels in all cases. The figure uses a log scale to make both AO and the lower-rate DDPG pilot visible.
+
+The 16-antenna perfect-CSI AO results match the prior 100-draw comparison. The noisy 16-antenna row uses the shared 32-antenna noise samples for this sweep, so it can differ from the standalone Step 6 noisy row. Checks verified that the smaller true and estimated-noise arrays use identical prefixes and that the standalone imperfect-CSI experiment preserves its original results.
+
+
+Mean sum rate in bit/s/Hz
+
+### Perfect CSI
+
+| BS antennas | Fixed AO | Shared AO | Greedy AO | DDPG pilot |
+| ---: | ---: | ---: | ---: | ---: |
+| 4 | 0.0014358 | 0.018729 | 0.015785 | 1.4291e-05 |
+| 8 | 0.0028562 | 0.03472 | 0.029201 | 1.7684e-05 |
+| 12 | 0.0042424 | 0.050246 | 0.044057 | 1.8376e-05 |
+| 16 | 0.0056096 | 0.063938 | 0.05679 | 1.5702e-05 |
+| 20 | 0.0069198 | 0.079262 | 0.071519 | 1.5435e-05 |
+| 24 | 0.0083581 | 0.092607 | 0.079756 | 2.0272e-05 |
+| 28 | 0.0097244 | 0.10623 | 0.089225 | 1.5828e-05 |
+| 32 | 0.010852 | 0.11884 | 0.10754 | 2.1725e-05 |
+
+### 1% per-link relative error energy
+
+| BS antennas | Fixed AO | Shared AO | Greedy AO | DDPG pilot |
+| ---: | ---: | ---: | ---: | ---: |
+| 4 | 0.0016281 | 0.017943 | 0.016132 | 1.4146e-05 |
+| 8 | 0.0030071 | 0.034488 | 0.029422 | 1.6238e-05 |
+| 12 | 0.0045024 | 0.050102 | 0.042382 | 1.7959e-05 |
+| 16 | 0.0060096 | 0.062125 | 0.057557 | 1.4383e-05 |
+| 20 | 0.0073847 | 0.076643 | 0.074299 | 1.5154e-05 |
+| 24 | 0.0090216 | 0.093858 | 0.084233 | 1.8171e-05 |
+| 28 | 0.010379 | 0.10387 | 0.098851 | 1.4414e-05 |
+| 32 | 0.011921 | 0.1144 | 0.10711 | 1.5582e-05 |
+
+All three AO baselines increased at every antenna count with perfect and relative-error CSI. Shared AO led across the sweep. The DDPG pilot remained near 1e-5 bit/s/Hz and did not show a consistent increase. All user, target, and joint threshold pass rates were 0% across methods and conditions. The AO trend agrees with the direction in Fig. 2(b), while the absolute rates and method ranking differ. [Antenna sweep plot](antenna_sweep.png)
