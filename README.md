@@ -291,3 +291,22 @@ Mean sum rate in bit/s/Hz
 | 32 | 0.011921 | 0.1144 | 0.10711 | 1.5582e-05 |
 
 All three AO baselines increased at every antenna count with perfect and relative-error CSI. Shared AO led across the sweep. The DDPG pilot remained near 1e-5 bit/s/Hz and did not show a consistent increase. All user, target, and joint threshold pass rates were 0% across methods and conditions. The AO trend agrees with the direction in Fig. 2(b), while the absolute rates and method ranking differ. [Antenna sweep plot](antenna_sweep.png)
+
+## Step 8. RIS allocation maps for Fig. 2(d)
+
+```powershell
+python partition_visualization.py
+```
+
+Use a 64-element (8 by 8) RIS, 16 BS antennas, six CUs, and three sensing targets. The figure shows the first two of 100 held-out channels from seed 100000. On each draw, all policies use the same true CSI and NCC grouping. The two AO methods use up to six rounds. Train one DDPG actor from seed 0 for 2,400 steps with the faster settings from Step 4 and evaluate the same actor before and after training.
+
+Each color identifies one group. The figure gives group cell counts in legend order and reports the weakest target's sensing power as a fraction of its requirement. This distinguishes a layout that allocates sensing elements from one that actually meets the sensing threshold. We count distinct labeled grids over 100 draws, with the untrained actor included for comparison. The fixed layout and DDPG use rectangles, and the greedy method can assign scattered cells. The layout and reported target powers were checked against direct evaluation on the example channels.
+
+| Method | Distinct labeled layouts | Mean sensing cells | Sensing cell range | Mean sum rate (bit/s/Hz) | Joint pass |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fixed partition + AO | 1 | 16.00 | 16 to 16 | 0.016281 | 0% |
+| Greedy assignment + AO | 100 | 1.00 | 1 to 1 | 0.157104 | 0% |
+| DDPG before training | 15 | 16.00 | 16 to 16 | 4.74934e-5 | 0% |
+| DDPG after training | 46 | 13.32 | 7 to 28 | 7.73324e-5 | 0% |
+
+The two plotted DDPG layouts allocate 24 / 12 / 12 / 16 and 36 / 6 / 6 / 16 cells to CU groups 1–3 and sensing. The sensing count stayed the same on these two examples and varied across the full set. The fixed layout always uses 16 cells per group. The greedy rule gave 61 cells to a single communication group on both examples, with a different group chosen on each draw. All-user and all-target pass rates were 0% for all methods. This single DDPG run demonstrates variation in the decoded rectangles under the current channel model. The paper's successful sensing result remains open. [RIS allocation maps](partition_visualization.png)
