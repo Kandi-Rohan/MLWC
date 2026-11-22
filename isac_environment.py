@@ -127,6 +127,10 @@ class ISACEnvironment:
         self.ris_users = np.array([self._link(RIS, user, "ris") for user in users])
         self.ris_targets = np.array([self._link(RIS, target, "ris") for target in targets])
         self.direct = np.array([self._link(BS, target, "direct") for target in targets])
+        return self._observe()
+
+    def _observe(self):
+        c = self.config
         self.groups, self.centers = k_means_plus_plus_cu_grouping(self.ris_users, c.groups)
         self.user_group = np.empty(c.users, dtype=int)
         for label, members in enumerate(self.groups):

@@ -89,13 +89,16 @@ def evaluate(agent, config, seed, trials, random_policy=False):
     return np.mean(measurements, axis=0)
 
 
-def train(config, seed, steps, lr, tau, progress=False):
-    env = ISACEnvironment(config, seed)
+def train(config, seed, steps, lr, tau, progress=False, *,
+          environment=ISACEnvironment, on_step=None):
+    env = environment(config, seed)
     state = env.reset()
     agent = DDPG(state.size, env.action_size, min(steps, 10000),
                  seed, lr, tau)
     rng = np.random.default_rng(seed)
     rewards = []
+    if on_step is not None:
+        on_step(0, agent)
     for step in range(steps):
         if step < 128:
             action = rng.uniform(-1, 1, env.action_size)
@@ -107,6 +110,8 @@ def train(config, seed, steps, lr, tau, progress=False):
         rewards.append(reward)
         if agent.seen >= 64:
             agent.update(64)
+        if on_step is not None:
+            on_step(step + 1, agent)
         if progress and (step + 1) % 100 == 0:
             print(f"Step {step + 1}: mean reward {np.mean(rewards[-100:]):.4f}", flush=True)
     return agent, rewards

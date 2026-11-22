@@ -160,3 +160,34 @@ Wei et al. describe the reference [11] baseline as greedy assignment of RIS elem
 At 36 elements, the greedy adaptation reached 0.0568 bit/s/Hz after AO, compared with 0.00561 for fixed AO and 0.0639 for shared AO. At 100 elements, greedy AO reached 0.324 and shared AO reached 0.305 bit/s/Hz. Across the tested sizes, the sensing group received one element per draw, and joint QoS stayed at 0%. Thus the sum-rate ranking alone does not establish a sensing benefit.
 
 Independent enumeration through the full evaluator verified the greedy choices on a small surface. Additional checks covered assignment coverage, deterministic repetition, phase quantization, the transmit-power cap, and increasing reward on accepted AO updates. The original channel audit also passed.
+
+## Step 4. DDPG sanity check on a known-feasible channel
+
+```powershell
+python ddpg_sanity.py
+```
+
+The paper-model link audit found that some draws fail even optimistic per-link bounds. This experiment isolates the learning pipeline with a synthetic channel where a feasible action can be constructed. It uses three BS antennas, two users, one sensing target, and a 2 by 3 RIS. Each user has its own orthogonal BS direction and two reflecting elements. We vary the user gains and relative phases across draws. The two communication beams also illuminate the target over a direct path. This controlled design has a simpler interference pattern than the reference channel model.
+
+The constructed action gives each user its two cells, compensates for the relative phase, and splits the power equally between the two orthogonal beams. In the weakest case allowed by the synthetic gain ranges, the aligned user rate exceeds 1.45 bit/s/Hz and the target receives at least 9.11e-7 W. The original thresholds remain 0.5 bit/s/Hz for each user and 3e-7 W for sensing. The script runs the constructed action through the same geometry, beam, and phase decoder and checks that it passes all held-out draws. The actor trains from scratch without access to the constructed action.
+
+The controlled run uses seeds 0, 1, and 2 for 2,400 steps each. It uses a learning rate of 3e-4 and target-update coefficient of 0.005 to test learning over a short run. It scales the stronger synthetic observations by an additional factor of 0.1 before passing them to the networks. Every 200 steps, the current actor is evaluated without exploration noise on the same 128 draws from a separate seed. The plot shows each seed as a thin line and their mean as the thick line. The dashed reference shows the constructed feasible action.
+
+The original channel generator and default training settings retain their behavior. The channel audit passed, 20 original-model draws reproduced identical CSI, rates, sensing and reward, and a 70-step original-model training check reproduced the previous rewards and actor weights exactly.
+
+| Policy at evaluation | Mean reward | Mean sum rate (bit/s/Hz) | All users pass | Sensing passes | Joint pass |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Constructed feasible action | 2.3011 | 2.3011 | 100% | 100% | 100% |
+| Random action | -8.4388 | 0.1435 | 0% | 93.0% | 0% |
+| DDPG seed 0, final | 1.9840 | 1.9840 | 100% | 100% | 100% |
+| DDPG seed 1, final | 0.4701 | 1.5247 | 25% | 100% | 25% |
+| DDPG seed 2, final | 1.9933 | 1.9933 | 100% | 100% | 100% |
+| DDPG final, mean across seeds | 1.4825 | 1.8340 | 75% | 100% | 75% |
+
+Every untrained actor had 0% joint satisfaction. The final agents averaged 75%, and some checkpoints dropped sharply during training. These results show that the learning pipeline can discover feasible actions on the controlled channel, with substantial variation across seeds and checkpoints. [Held-out learning curves](ddpg_sanity.png)
+
+For comparison, the same controlled test with the paper's learning rate and target update coefficient stayed at 0% joint satisfaction across all 2,400 steps and all three seeds. Its final mean reward was -9.9052. This comparison is for the stated step budget on the controlled channel. The paper-model performance gap and Figure 2 remain open.
+
+```powershell
+python ddpg_sanity.py --lr 1e-6 --tau 1e-8 --plot ddpg_sanity_paper_settings.png
+```
