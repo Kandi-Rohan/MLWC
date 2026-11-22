@@ -12,6 +12,21 @@ The base station sends communication and sensing streams through the same wirele
 4. **Evaluate and learn.** User SINR accounts for interference from other streams. The receiver rate is log2(1 + SINR). Sensing performance is target illumination in watts, with direct and reflected amplitudes combined before squaring. The training reward adds the user rates and subtracts penalties for shortfalls. The critic estimates that reward and guides the actor.
 5. **Compare methods.** On the same simulated channels, report both mean sum rate and the fraction of draws where every user and target meets its threshold. The fixed and shared RIS baselines isolate the effect of allocation and give the learned policy a conventional comparison.
 
+## Reproduce the submission figures
+
+Run these commands from the repository root after installing the packages in `requirements.txt`.
+
+```powershell
+python -m pip install -r requirements.txt
+python channel_audit/check_link_budget.py
+python reference_convergence.py
+python antenna_sweep.py
+python ris_size_sweep.py
+python partition_visualization.py
+```
+
+The main figure scripts write their PNGs in the current directory by default. The separate controlled learning and channel-estimation studies run with `python ddpg_sanity.py` and `python imperfect_csi.py`. See the validation summary at the end for the claims supported by each figure.
+
 ## Run
 
 From this folder, install the packages in `requirements.txt` if needed and run:
@@ -317,7 +332,7 @@ The two plotted DDPG layouts allocate 24 / 12 / 12 / 16 and 36 / 6 / 6 / 16 cell
 python ris_size_sweep.py
 ```
 
-Hold the BS at 16 antennas with six CUs, three CU groups, and three sensing targets. Sweep square RIS surfaces with 9, 16, 25, 36, 49, 64, and 100 elements. Each point uses 100 held-out draws from seed 100000. Node positions, path gains, and path angles are paired across sizes. The smaller RIS uses the same coefficients as the overlapping rows and columns of the 10 by 10 surface. The relative-error test also pairs the standard complex Gaussian samples at overlapping RIS coordinates, then applies the RMS scaling for each link at its current size.
+Hold the BS at 16 antennas with six CUs, three CU groups, and three sensing targets. Sweep square RIS surfaces with 9, 16, 25, 36, 49, 64, 81, and 100 elements. Each point uses 100 held-out draws from seed 100000. Node positions, path gains, and path angles are paired across sizes. The smaller RIS uses the same coefficients as the overlapping rows and columns of the 10 by 10 surface. The relative-error test also pairs the standard complex Gaussian samples at overlapping RIS coordinates, then applies the RMS scaling for each link at its current size.
 
 Use the same six-round AO baselines and DDPG pilot settings as the antenna sweep. Train one actor per antenna/RIS configuration and seed for 320 steps, using three seeds and the faster training settings from Step 4. Evaluate the fixed, shared, and greedy AO methods and the trained DDPG pilot under perfect CSI and 1% per-link relative error energy. Score both conditions on the true channels. This matched sweep replaces the earlier pilot as the main Fig. 2(c)-style comparison in this project. The earlier heuristic plot remains available for the initial implementation record.
 
@@ -334,6 +349,7 @@ Mean sum rate in bit/s/Hz
 | 36 | 0.0056096 | 0.063938 | 0.05679 | 1.5702e-05 |
 | 49 | 0.0089435 | 0.10858 | 0.10014 | 2.1505e-05 |
 | 64 | 0.016281 | 0.17095 | 0.1571 | 2.7096e-05 |
+| 81 | 0.020234 | 0.22556 | 0.23147 | 5.1058e-05 |
 | 100 | 0.037038 | 0.3048 | 0.32417 | 6.3907e-05 |
 
 ### 1% per-link relative error energy
@@ -346,9 +362,10 @@ Mean sum rate in bit/s/Hz
 | 36 | 0.0058109 | 0.059512 | 0.053118 | 1.4303e-05 |
 | 49 | 0.0083429 | 0.10195 | 0.099803 | 2.2273e-05 |
 | 64 | 0.01633 | 0.16703 | 0.16878 | 2.4248e-05 |
+| 81 | 0.019844 | 0.21005 | 0.20969 | 5.0739e-05 |
 | 100 | 0.036444 | 0.30208 | 0.32245 | 6.5827e-05 |
 
-Mean sum rate increased at every size for all four methods in both conditions. Greedy AO led at 100 elements with perfect CSI and at 64 and 100 elements with relative error. Shared AO led at the other sizes. The DDPG pilot remained well below the AO methods, and every method had 0% all-user, all-target, and joint threshold pass. The upward size trend appeared in our model, while the rates and method ranking in Fig. 2(c) remain open. [Matched RIS-size plot](ris_size_sweep.png)
+Mean sum rate increased at every size for all four methods in both conditions. Greedy AO led at 81 and 100 elements with perfect CSI and at 64 and 100 elements with relative error. Shared AO led at the other sizes. The DDPG pilot remained well below the AO methods, and every method had 0% all-user, all-target, and joint threshold pass. The upward size trend appeared in our model, while the rates and method ranking in Fig. 2(c) remain open. [Matched RIS-size plot](ris_size_sweep.png)
 
 Checks confirmed that the true channels and estimation samples match at overlapping RIS coordinates. The 36-element perfect-CSI row reproduced the shared point in the antenna sweep, and regression runs confirmed the existing antenna and CSI scripts preserve their results.
 
@@ -366,7 +383,7 @@ All panels refer to Fig. 2 in Wei et al. [Paper](https://doi.org/10.1109/LWC.202
 | --- | --- | --- |
 | 2(a), convergence | DDPG average reward rises and stabilizes on the simulated mmWave channel. | Reference-channel reward remains near -30 over our training budget. On the separate known-feasible channel the faster-setting DDPG reached 75% joint pass across three seeds, with variation across seeds. |
 | 2(b), BS antenna count | Sum rate rises with antenna count and the proposed method leads the compared baselines. | All three AO rates rise at every tested count under both CSI conditions. Shared RIS AO leads in our experiment and the short DDPG pilot has no consistent upward trend. [Plot](antenna_sweep.png) |
-| 2(c), RIS size | Sum rate rises with RIS size and the proposed method leads. | Mean sum rate rises at every size for all four tested methods. Shared AO leads most points and greedy AO leads at 100 elements with perfect CSI and at 64 and 100 elements with relative error. [Plot](ris_size_sweep.png) |
+| 2(c), RIS size | Sum rate rises with RIS size and the proposed method leads. | Mean sum rate rises at every size for all four tested methods. Shared AO leads most points and greedy AO leads at 81 and 100 elements with perfect CSI and at 64 and 100 elements with relative error. [Plot](ris_size_sweep.png) |
 | 2(d), RIS partition | One example shows distinct, non-overlapping rectangular allocations. | One trained actor produced 46 distinct labeled rectangular layouts on 100 draws and used 7 to 28 sensing cells. No draw met every target requirement. [Maps](partition_visualization.png) |
 
 Cross-checks confirmed identical perfect-CSI AO values in the paired policy and noisy-CSI experiments, identical perfect-CSI rates at the shared 16-antenna and 36-element point of the two sweeps, and the same perfect-CSI greedy rate at 64 elements in the RIS-size and partition-map experiments.

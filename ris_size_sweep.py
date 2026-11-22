@@ -9,7 +9,7 @@ from compare_policies import validate_experiment_arguments
 from isac_environment import Config
 
 
-RIS_SIDES = (3, 4, 5, 6, 7, 8, 10)
+RIS_SIDES = (3, 4, 5, 6, 7, 8, 9, 10)
 
 
 def main():
