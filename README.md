@@ -220,3 +220,31 @@ The channel audit passed again after extracting the non-advancing action evaluat
 | 2 | 1.70219e-5 | 1.29308e-5 |
 
 Shared RIS AO had the highest mean sum rate in this experiment. Both DDPG settings averaged slightly below the untrained actors after the stated step budget. The per-link upper bounds passed all users on 0% of these draws and all targets on 0%, confirming the existing feasibility gap for this held-out set. This comparison measures the complete policies under the current model. Figure 2 and the question of how much the learned partition contributes remain open.
+
+## Step 6. Imperfect CSI at 36 RIS elements
+
+```powershell
+python imperfect_csi.py
+```
+
+Use the same 100 true channel draws and the same training seeds, step budget, and AO iteration limit as in Step 5. The script retrains the actors with perfect CSI using the same seeds, then holds their weights fixed across the three evaluation conditions. The AO baselines, CU grouping, and DDPG input all use the supplied channel estimate. The evaluator keeps the user-to-group assignments from that estimate and calculates rates and sensing power on the true channel. Both noisy conditions share the same underlying complex Gaussian samples.
+
+Wei et al. describe the estimate as the true CSI plus independent, zero-mean complex Gaussian errors of variance 0.01. They do not specify a normalization convention in the numerical-results description. We test the raw additive interpretation and a separate per-link normalization sensitivity case.
+
+- **Perfect CSI.** Use each true channel as the estimate.
+- **Raw additive error.** Add noise with complex variance 0.01 directly to each complex channel coefficient. Its real and imaginary parts each have variance 0.005.
+- **Per-link relative error.** Set the error variance to 0.01 times the mean squared true-coefficient magnitude of its link. This gives approximately 1% error energy relative to the true channel energy. The normalization covers the full BS-to-RIS matrix, and each RIS-to-user, RIS-to-target, and direct BS-to-target link separately.
+
+The script prints sum rate and QoS pass rates for all methods, how often estimated group labels differ from the perfect-CSI labels, and the error-energy ratio by link type. Zero-variance checks gave identical scores for all three conditions. An independent reference check confirmed that decisions selected using a noisy channel were scored with the true coefficients and the estimated user grouping.
+
+| Method | Perfect CSI | Raw additive error | Per-link relative error |
+| --- | ---: | ---: | ---: |
+| Fixed partition AO | 0.00560964 | 1.74699e-5 | 0.00584886 |
+| Shared RIS AO | 0.0639383 | 6.40427e-5 | 0.0660309 |
+| Greedy assignment AO | 0.0567903 | 1.88828e-5 | 0.0590620 |
+| DDPG, paper training settings | 1.94689e-5 | 2.48503e-5 | 2.00326e-5 |
+| DDPG, faster training settings | 1.79680e-5 | 3.91404e-5 | 1.81496e-5 |
+
+All entries are held-out mean sum rates in bit/s/Hz. Every method had 0% all-user, all-target, and joint pass in all three conditions. The perfect-CSI values reproduced Step 5 to the displayed precision. Estimated group labels differed from the perfect-CSI labels on 100 of 100 raw-error draws and 46 of 100 relative-error draws.
+
+Raw error energy was 3.65 million to 11.2 million times the true channel energy across the four link types. It obscures the simulated CSI and gives much lower rates for all AO methods. Relative error energy was 0.96% to 1.03% of the true channel energy. In that case, the method ranking was preserved and the rates stayed close to the perfect-CSI runs. The small increases under relative noise apply to this draw set and the finite-iteration solvers. These comparisons document the effect of the error convention on our simulator and leave the paper's imperfect-CSI curves open.
