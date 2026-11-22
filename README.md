@@ -131,20 +131,32 @@ The endpoint angles leave the link-budget gap open. At +30 dB both variants pass
 python ao_baseline.py --ris-sides 3 4 5 6 7 8 10
 ```
 
-For both the fixed partition and the shared surface, initialize with the existing phase-alignment and regularized zero-forcing heuristic. Hold the RIS phases fixed and take one projected gradient step on the BS beamforming matrix. The gradient includes interference at every user and the sensing term from Eq. (8). Backtracking accepts an improving step and the projection respects the transmit-power cap. Then hold the beamforming matrix fixed and test all eight allowed phase values at each element. Repeat for up to six rounds. This baseline uses projected gradient and discrete coordinate search. The separate ref. [11] greedy partitioning benchmark remains open.
+For both the fixed partition and the shared surface, initialize with the existing phase-alignment and regularized zero-forcing heuristic. Hold the RIS phases fixed and take one projected gradient step on the BS beamforming matrix. The gradient includes interference at every user and the sensing term from Eq. (8). Backtracking accepts an improving step and the projection respects the transmit-power cap. Then hold the beamforming matrix fixed and test all eight allowed phase values at each element. Repeat for up to six rounds. This baseline uses projected gradient and discrete coordinate search. The greedy layout described below uses the same AO solver.
 
 The following mean sum rates are in bit/s/Hz. Each size uses 100 paired draws at 16 BS antennas and the original channel settings.
 
-| RIS elements | Fixed heuristic | Fixed AO | Shared heuristic | Shared AO |
-| ---: | ---: | ---: | ---: | ---: |
-| 9 | 0.0000167 | 0.000287 | 0.000279 | 0.00500 |
-| 16 | 0.0000806 | 0.00139 | 0.000749 | 0.0151 |
-| 25 | 0.000114 | 0.00217 | 0.00142 | 0.0357 |
-| 36 | 0.000273 | 0.00561 | 0.00316 | 0.0639 |
-| 49 | 0.000452 | 0.00894 | 0.00628 | 0.109 |
-| 64 | 0.000802 | 0.0163 | 0.0103 | 0.171 |
-| 100 | 0.00186 | 0.0370 | 0.0198 | 0.305 |
+| RIS elements | Fixed heuristic | Fixed AO | Shared heuristic | Shared AO | Greedy initialization | Greedy AO |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 9 | 0.0000167 | 0.000287 | 0.000279 | 0.00500 | 0.0000961 | 0.00234 |
+| 16 | 0.0000806 | 0.00139 | 0.000749 | 0.0151 | 0.000393 | 0.00889 |
+| 25 | 0.000114 | 0.00217 | 0.00142 | 0.0357 | 0.00127 | 0.0285 |
+| 36 | 0.000273 | 0.00561 | 0.00316 | 0.0639 | 0.00265 | 0.0568 |
+| 49 | 0.000452 | 0.00894 | 0.00628 | 0.109 | 0.00482 | 0.100 |
+| 64 | 0.000802 | 0.0163 | 0.0103 | 0.171 | 0.00822 | 0.157 |
+| 100 | 0.00186 | 0.0370 | 0.0198 | 0.305 | 0.0193 | 0.324 |
 
 Every method had 0% all-user, all-target, and joint QoS satisfaction at every size. AO improved its initialization but did not resolve the link-budget gap. The objective uses the sensing deficit in watts, so a numerically small sensing penalty can coexist with a large relative sensing shortfall. We therefore continue to report the sensing threshold separately.
 
 The original channel audit passed after the evaluator refactor. On 20 regression draws, the refactored evaluator reproduced the prior rates, illumination, and states. Finite differences checked the complex beam gradient. Additional checks verified the power cap, discrete phases, and increasing reward on accepted AO iterations.
+
+### Greedy element assignment
+
+Wei et al. describe the reference [11] baseline as greedy assignment of RIS elements followed by AO. Our adaptation uses the following explicit assignment rule. The exact selection rule in the cited work could not be verified from the accessible sources. [Wei et al.](https://doi.org/10.1109/LWC.2026.3699388) · [Wang et al., reference 11](https://doi.org/10.1109/TVT.2023.3326488)
+
+1. Use the fixed-partition heuristic's BS beam as the starting beam. Visit elements starting with the strongest incoming BS-to-RIS channel.
+2. For the current element, score the eligible communication and sensing groups at all eight phase values. Keep the group and phase with the highest Eq. (8) score given the allocations already made. Reserve one element for each group. Each element has one owner and groups can have scattered elements.
+3. Freeze the resulting layout, then run the same beam and phase optimizer used for the fixed and shared RIS. The same command above runs all three methods on paired channel draws with the same power limit and QoS thresholds.
+
+At 36 elements, the greedy adaptation reached 0.0568 bit/s/Hz after AO, compared with 0.00561 for fixed AO and 0.0639 for shared AO. At 100 elements, greedy AO reached 0.324 and shared AO reached 0.305 bit/s/Hz. Across the tested sizes, the sensing group received one element per draw, and joint QoS stayed at 0%. Thus the sum-rate ranking alone does not establish a sensing benefit.
+
+Independent enumeration through the full evaluator verified the greedy choices on a small surface. Additional checks covered assignment coverage, deterministic repetition, phase quantization, the transmit-power cap, and increasing reward on accepted AO updates. The original channel audit also passed.

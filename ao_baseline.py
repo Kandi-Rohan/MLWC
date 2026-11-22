@@ -1,4 +1,4 @@
-"""Interference-aware alternating optimization for fixed and shared RIS baselines."""
+"""Interference-aware alternating optimization for fixed, shared and greedy RIS baselines."""
 
 import argparse
 from dataclasses import replace
@@ -72,9 +72,47 @@ def update_phases(env, links, beam, phases, levels):
     return phases
 
 
+def phase_levels(bits):
+    return 2 * np.pi * np.arange(2 ** bits) / 2 ** bits
+
+
+def greedy_partition(env, beam):
+    """Adapt the greedy element assignment described by Wei et al. for ref. [11]."""
+    c = env.config
+    levels = phase_levels(c.bits)
+    coefficients = np.exp(1j * levels)[None, :, None, None]
+    groups = np.arange(c.groups + 1)
+    counts = np.zeros(len(groups), dtype=int)
+    labels = np.empty(env.elements, dtype=int)
+    phases = np.empty(env.elements)
+    element_streams = env.bs_ris @ beam
+    order = np.argsort(-np.linalg.norm(env.bs_ris, axis=1), kind="stable")
+    user_streams = np.zeros((c.users, env.streams), dtype=complex)
+    target_streams = env.direct.conj() @ beam
+
+    for assigned, m in enumerate(order):
+        # Keep enough cells for groups that do not have any yet.
+        missing = groups[counts == 0]
+        eligible = missing if len(missing) == env.elements - assigned else groups
+        user_links = env.ris_users[:, m].conj() * (eligible[:, None] == env.user_group)
+        target_links = env.ris_targets[:, m].conj() * (eligible[:, None] == c.groups)
+        user_delta = user_links[:, None, :, None] * element_streams[m]
+        target_delta = target_links[:, None, :, None] * element_streams[m]
+        user_trials = user_streams + coefficients * user_delta
+        target_trials = target_streams + coefficients * target_delta
+        scores = env.stream_metrics(user_trials, target_trials)[-1]
+        pick = np.unravel_index(np.argmax(scores), scores.shape)
+        group_choice, phase_choice = pick
+        label = eligible[group_choice]
+        counts[label] += 1
+        labels[m], phases[m] = label, levels[phase_choice]
+        user_streams, target_streams = user_trials[pick], target_trials[pick]
+    return labels.reshape(c.rows, c.cols), phases
+
+
 def optimize(env, grid, beam, phases, iterations=6):
     """Alternate beam and phase updates while retaining a monotone reward history."""
-    levels = 2 * np.pi * np.arange(2 ** env.config.bits) / 2 ** env.config.bits
+    levels = phase_levels(env.config.bits)
     user_links, target_links = env.reflected_links(grid)
     history = [env.evaluate(grid, beam, phases)["reward"]]
     for _ in range(iterations):
@@ -101,11 +139,16 @@ def compare(side, draws, iterations, seed):
     config = replace(Config(), rows=side, cols=side)
     env = ISACEnvironment(config, seed)
     samples = []
+    allocations = []
     for _ in range(draws):
         env.reset()
+        fixed = heuristic_action(env, shared=False)
+        shared = heuristic_action(env, shared=True)
+        greedy_grid, greedy_phases = greedy_partition(env, fixed[1])
+        greedy = (greedy_grid, fixed[1], greedy_phases)
+        allocations.append(np.bincount(greedy_grid.ravel(), minlength=config.groups + 1))
         outcomes = []
-        for shared in (False, True):
-            grid, beam, phases = heuristic_action(env, shared)
+        for grid, beam, phases in (fixed, shared, greedy):
             outcomes.append(metrics(config, env.evaluate(grid, beam, phases)))
             beam, phases, _ = optimize(env, grid, beam, phases, iterations)
             outcomes.append(metrics(config, env.evaluate(grid, beam, phases)))
@@ -114,9 +157,13 @@ def compare(side, draws, iterations, seed):
     print(f"\n{side ** 2} RIS elements, {draws} paired draws, up to {iterations} AO iterations")
     print("| Method | Mean sum rate | Mean reward | All users pass | All targets pass | Joint pass |")
     print("| --- | ---: | ---: | ---: | ---: | ---: |")
-    names = ("Fixed heuristic", "Fixed AO", "Shared heuristic", "Shared AO")
+    names = ("Fixed heuristic", "Fixed AO", "Shared heuristic", "Shared AO",
+             "Greedy initialization", "Greedy AO")
     for name, (rate, score, users, targets, joint) in zip(names, result.mean(axis=0)):
         print(f"| {name} | {rate:.6g} | {score:.6g} | {users:.1%} | {targets:.1%} | {joint:.1%} |")
+    mean_sizes = np.mean(allocations, axis=0)
+    print("Mean greedy allocation (CU groups 1-3, then sensing): "
+          + ", ".join(f"{size:.2f}" for size in mean_sizes))
 
 
 def main():
