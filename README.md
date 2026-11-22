@@ -351,3 +351,38 @@ Mean sum rate in bit/s/Hz
 Mean sum rate increased at every size for all four methods in both conditions. Greedy AO led at 100 elements with perfect CSI and at 64 and 100 elements with relative error. Shared AO led at the other sizes. The DDPG pilot remained well below the AO methods, and every method had 0% all-user, all-target, and joint threshold pass. The upward size trend appeared in our model, while the rates and method ranking in Fig. 2(c) remain open. [Matched RIS-size plot](ris_size_sweep.png)
 
 Checks confirmed that the true channels and estimation samples match at overlapping RIS coordinates. The 36-element perfect-CSI row reproduced the shared point in the antenna sweep, and regression runs confirmed the existing antenna and CSI scripts preserve their results.
+
+## Step 10. Final validation against Figure 2
+
+```powershell
+python reference_convergence.py
+```
+
+The reference convergence check uses the original 16-antenna, 36-element channel model, six CUs, and three sensing targets. It uses the reported learning rates and target-update coefficient, with 2,400 simulator steps for each of seeds 0, 1, and 2. The left plot shows non-overlapping 100-step means of exploratory training rewards. The right plot scores each actor without exploration on the same 100 held-out channels at step zero and every 400 steps. The horizontal axis uses simulator steps. The paper plots episodes, and their step counts are unspecified, so we compare the reward behavior over our stated budget.
+
+All panels refer to Fig. 2 in Wei et al. [Paper](https://doi.org/10.1109/LWC.2026.3699388)
+
+| Paper panel | What the paper reports | What this project verified |
+| --- | --- | --- |
+| 2(a), convergence | DDPG average reward rises and stabilizes on the simulated mmWave channel. | Reference-channel reward remains near -30 over our training budget. On the separate known-feasible channel the faster-setting DDPG reached 75% joint pass across three seeds, with variation across seeds. |
+| 2(b), BS antenna count | Sum rate rises with antenna count and the proposed method leads the compared baselines. | All three AO rates rise at every tested count under both CSI conditions. Shared RIS AO leads in our experiment and the short DDPG pilot has no consistent upward trend. [Plot](antenna_sweep.png) |
+| 2(c), RIS size | Sum rate rises with RIS size and the proposed method leads. | Mean sum rate rises at every size for all four tested methods. Shared AO leads most points and greedy AO leads at 100 elements with perfect CSI and at 64 and 100 elements with relative error. [Plot](ris_size_sweep.png) |
+| 2(d), RIS partition | One example shows distinct, non-overlapping rectangular allocations. | One trained actor produced 46 distinct labeled rectangular layouts on 100 draws and used 7 to 28 sensing cells. No draw met every target requirement. [Maps](partition_visualization.png) |
+
+Cross-checks confirmed identical perfect-CSI AO values in the paired policy and noisy-CSI experiments, identical perfect-CSI rates at the shared 16-antenna and 36-element point of the two sweeps, and the same perfect-CSI greedy rate at 64 elements in the RIS-size and partition-map experiments.
+
+The implementation evidence covers the channel calculations, valid layout decoding, a runnable DDPG pipeline, and controlled comparisons. The reference model falls below the paper's rates and thresholds. Its optimistic all-user and all-target link-bound checks passed 0% of the reference draws. The exact channel assumptions and reference [11] implementation remain unverified, so the reproduction claims apply to the observed trends and layout behavior.
+
+| Reference training checkpoint | Mean held-out reward | Mean held-out sum rate (bit/s/Hz) | Joint pass |
+| ---: | ---: | ---: | ---: |
+| 0 | -29.999777926 | 2.09997e-5 | 0% |
+| 400 | -29.999779966 | 2.08143e-5 | 0% |
+| 800 | -29.999781116 | 2.07098e-5 | 0% |
+| 1,200 | -29.999778601 | 2.09385e-5 | 0% |
+| 1,600 | -29.999787671 | 2.01142e-5 | 0% |
+| 2,000 | -29.999790002 | 1.99024e-5 | 0% |
+| 2,400 | -29.999794774 | 1.94689e-5 | 0% |
+
+The initial and final values agree with the paper-setting runs in Step 5. All seeds had 0% all-user, all-target, and joint pass at the recorded checkpoints. Tiny rates keep the reward near the six-user shortfall penalty of -30. The zoomed axes show the variation around that value. [Reference convergence plot](reference_convergence.png) · [Known-feasible convergence plot](ddpg_sanity.png)
+
+Nine reduced runs completed from a clean source snapshot using the installed project dependencies. They covered the deterministic channel audit, feasibility sensitivity, both DDPG experiments, the paired policy comparison, imperfect CSI, the antenna and RIS sweeps, and the allocation maps. Each plotting command produced a PNG.
